@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type {
   Deal,
+  Meeting,
   ApprovalSettings,
   PendingStageChange,
   UpdateState,
@@ -50,6 +51,12 @@ interface DealStore {
     type: "strength" | "gap",
     text: string
   ) => void;
+
+  // Add meeting from analysis result
+  addMeeting: (
+    dealId: number,
+    data: Omit<Meeting, "id" | "corrections" | "managerReview">
+  ) => number;
 
   // Stage regression
   submitStageChange: (
@@ -477,6 +484,36 @@ Stage → 最新商談日 → 最新総括 → Next Action
         };
       }),
     }));
+  },
+
+  addMeeting: (dealId, data) => {
+    const newId = Date.now();
+    set((state) => ({
+      deals: state.deals.map((d) => {
+        if (d.id !== dealId) return d;
+        const stageChanged = data.type === "commercial" && data.stage !== d.stage;
+        return {
+          ...d,
+          stage: data.type === "commercial" ? data.stage : d.stage,
+          lastUpdate: "今日",
+          stageHistory: stageChanged
+            ? [
+                ...d.stageHistory.map((sh) =>
+                  sh.stage === d.stage && !sh.exitedAt
+                    ? { ...sh, exitedAt: TODAY }
+                    : sh
+                ),
+                { stage: data.stage, enteredAt: TODAY, exitedAt: null },
+              ]
+            : d.stageHistory,
+          meetings: [
+            ...d.meetings,
+            { ...data, id: newId, corrections: [], managerReview: null },
+          ],
+        };
+      }),
+    }));
+    return newId;
   },
 
   submitStageChange: (dealId, fromStage, toStage, reason) => {

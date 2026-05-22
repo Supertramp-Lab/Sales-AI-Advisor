@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useDealStore } from "@/store/dealStore";
 import { C } from "@/lib/constants";
 import { StagePill } from "@/components/ui/StagePill";
+import { AppHeader } from "@/components/ui/AppHeader";
 
 const AI_CHAT = [
   "この案件の経緯を踏まえると、KU経由でIT部門と繋がる戦略は正しい選択です。次回商談では「IT担当者と一緒に現状確認の場を設けていただけますか？」とKUに直接依頼することをお勧めします。",
@@ -59,7 +60,6 @@ export function ChatView({ dealId, meetingId }: Props) {
   ];
 
   const S = {
-    bar: { background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "13px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky" as const, top: 0, zIndex: 10, boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)` },
     back: { background: "transparent", color: C.brand, border: "none", padding: 0, fontSize: 13, fontWeight: 600, cursor: "pointer" },
     btnGhost: { background: "#fff", color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 7, padding: "6px 13px", fontWeight: 500, fontSize: 12, cursor: "pointer" },
     btn: { background: C.brand, color: "#fff", border: "none", borderRadius: 8, padding: "10px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer", flexShrink: 0 },
@@ -68,12 +68,21 @@ export function ChatView({ dealId, meetingId }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bgMain }}>
-      <div style={S.bar}>
-        <button style={S.back} onClick={() => meetingId ? router.push(`/deals/${dealId}/meetings/${meetingId}`) : router.push(`/deals/${dealId}`)}>
-          ← 分析に戻る
-        </button>
-        {meeting && <StagePill stage={meeting.stage} />}
-      </div>
+      <AppHeader
+        left={
+          <button
+            style={S.back}
+            onClick={() =>
+              meetingId
+                ? router.push(`/deals/${dealId}/meetings/${meetingId}`)
+                : router.push(`/deals/${dealId}`)
+            }
+          >
+            ← 分析に戻る
+          </button>
+        }
+        right={meeting ? <StagePill stage={meeting.stage} /> : undefined}
+      />
 
       <div style={{ padding: "11px 22px", borderBottom: `1px solid ${C.border}`, background: C.bgMain }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.textSub }}>{deal.company}</div>

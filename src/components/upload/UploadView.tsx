@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDealStore } from "@/store/dealStore";
 import { C, STAGES, PRODUCTS, type Stage } from "@/lib/constants";
+import { AppHeader, AppLogo } from "@/components/ui/AppHeader";
 
 interface Props {
   dealId: number;
@@ -14,7 +15,7 @@ type UploadTab = "file" | "text";
 
 export function UploadView({ dealId }: Props) {
   const router = useRouter();
-  const { deals, submitStageChange, approvalSettings } = useDealStore();
+  const { deals, submitStageChange, approvalSettings, addMeeting } = useDealStore();
   const deal = deals.find((d) => d.id === dealId);
 
   const [uploadType, setUploadType] = useState<UploadType>("commercial");
@@ -35,21 +36,48 @@ export function UploadView({ dealId }: Props) {
   const selectedIdx = STAGES.indexOf(uploadStage);
   const isRegression = uploadType === "commercial" && selectedIdx < currentIdx;
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (isRegression) {
       submitStageChange(dealId, deal.stage, uploadStage, stageChangeReason || "ステージ後退");
     }
     setAnalyzing(true);
-    setTimeout(() => {
+
+    const today = new Date().toISOString().slice(0, 10);
+    const text = uploadText.trim() || `商談記録 ${today}`;
+
+    const form = new FormData();
+    form.append("text", text);
+    form.append("stage", uploadStage);
+    form.append("products", JSON.stringify(uploadProducts));
+    if (uploadFile) form.append("file", uploadFile);
+
+    try {
+      const res = await fetch("/api/analyze", { method: "POST", body: form });
+      const data = await res.json();
+
+      const newId = addMeeting(dealId, {
+        date: today,
+        stage: uploadStage,
+        type: uploadType,
+        products: uploadProducts as import("@/types").Product[],
+        totalScore: data.totalScore ?? null,
+        maxScore: data.maxScore ?? null,
+        summary: data.summary ?? "",
+        criteriaScores: data.criteriaScores ?? [],
+        customerAnalysis: data.customerAnalysis ?? null,
+        strengths: data.strengths ?? [],
+        gaps: data.gaps ?? [],
+        nextActions: data.nextActions ?? [],
+      });
+
+      router.push(`/deals/${dealId}/meetings/${newId}`);
+    } catch {
       setAnalyzing(false);
-      const lastMeeting = deal.meetings[deal.meetings.length - 1];
-      router.push(`/deals/${dealId}/meetings/${lastMeeting.id}`);
-    }, 2200);
+    }
   };
 
   const S = {
     app: { minHeight: "100vh", background: C.bgMain },
-    bar: { background: C.bgCard, borderBottom: `1px solid ${C.border}`, padding: "13px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky" as const, top: 0, zIndex: 10, boxShadow: C.shadowSm },
     body: { padding: "20px", maxWidth: 700, margin: "0 auto" },
     card: { background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 12, boxShadow: C.shadow },
     btn: { background: C.brand, color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontWeight: 600, fontSize: 13, cursor: "pointer" },
@@ -61,11 +89,7 @@ export function UploadView({ dealId }: Props) {
 
   return (
     <div style={S.app}>
-      <div style={S.bar}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.textMain }}>
-          Appier <span style={{ color: C.brand }}>AI</span> Deal Room
-        </div>
-      </div>
+      <AppHeader left={<AppLogo />} />
       <div style={S.body}>
         <button style={S.back} onClick={() => { router.push(`/deals/${dealId}`); setUploadFile(null); setUploadText(""); }}>
           ← 戻る

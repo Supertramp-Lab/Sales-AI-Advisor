@@ -7,7 +7,7 @@ import { C, STAGES, CLOSE_REASONS, type Stage } from "@/lib/constants";
 import { latestScore, daysSinceLast, currentStageDays, activeActionsCount, pendingCorrectionsCount } from "@/lib/dealUtils";
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { StagePill } from "@/components/ui/StagePill";
-import type { Deal } from "@/types";
+import { AppHeader, AppLogo } from "@/components/ui/AppHeader";
 
 type StageFilter = "all" | Stage | "won" | "lost";
 type SortKey = "lastUpdate" | "score" | "leadTime";
@@ -52,18 +52,6 @@ export function DealsListView() {
 
   const S = {
     app: { minHeight: "100vh", background: C.bgMain },
-    bar: {
-      background: C.bgCard,
-      borderBottom: `1px solid ${C.border}`,
-      padding: "13px 22px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      position: "sticky" as const,
-      top: 0,
-      zIndex: 10,
-      boxShadow: C.shadowSm,
-    },
     body: { padding: "20px", maxWidth: 700, margin: "0 auto" },
     card: {
       background: C.bgCard,
@@ -107,46 +95,41 @@ export function DealsListView() {
 
   return (
     <div style={S.app}>
-      <div style={S.bar}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.textMain, letterSpacing: "-0.02em" }}>
-            Appier <span style={{ color: C.brand }}>AI</span> Deal Room
-          </div>
-          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1, letterSpacing: "0.04em" }}>
-            REVENUE INTELLIGENCE HUB
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            style={{ ...S.btnGhost, position: "relative" }}
-            onClick={() => router.push("/manager")}
-          >
-            Strategy Console
-            {pendingTotal + unreviewedTotal > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: -6,
-                  right: -6,
-                  background: C.danger,
-                  color: "#fff",
-                  borderRadius: "50%",
-                  width: 16,
-                  height: 16,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {pendingTotal + unreviewedTotal}
-              </span>
-            )}
-          </button>
-          <button style={S.btn}>＋ 新規案件</button>
-        </div>
-      </div>
+      <AppHeader
+        left={<AppLogo subtitle="REVENUE INTELLIGENCE HUB" />}
+        right={
+          <>
+            <button
+              style={{ ...S.btnGhost, position: "relative" }}
+              onClick={() => router.push("/manager")}
+            >
+              Strategy Console
+              {pendingTotal + unreviewedTotal > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -6,
+                    background: C.danger,
+                    color: "#fff",
+                    borderRadius: "50%",
+                    width: 16,
+                    height: 16,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {pendingTotal + unreviewedTotal}
+                </span>
+              )}
+            </button>
+            <button style={S.btn}>＋ 新規案件</button>
+          </>
+        }
+      />
 
       <div style={S.body}>
         {/* Pipeline Overview */}

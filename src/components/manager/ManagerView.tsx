@@ -7,13 +7,14 @@ import { C, OWNERS, APPROVAL_KEYS } from "@/lib/constants";
 import { latestScore, daysSinceLast, pendingCorrectionsCount } from "@/lib/dealUtils";
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { StagePill } from "@/components/ui/StagePill";
+import { AppHeader, AppLogo } from "@/components/ui/AppHeader";
 
 type MgTab = "review" | "quarter" | "settings" | "rules";
 
 export function ManagerView() {
   const router = useRouter();
   const {
-    deals, approvalSettings, pendingStageChange, updateState,
+    deals, approvalSettings, pendingStageChange,
     setApprovalSettings, handleReview, approveStagePending, rejectStagePending,
     summaryRule, insightRule, setSummaryRule, setInsightRule,
   } = useDealStore();
@@ -52,7 +53,6 @@ export function ManagerView() {
 
   const S = {
     app: { minHeight: "100vh", background: C.bgMain },
-    bar: { background: C.bgCard, borderBottom: `1px solid ${C.border}`, padding: "13px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky" as const, top: 0, zIndex: 10, boxShadow: C.shadowSm },
     body: { padding: "20px", maxWidth: 700, margin: "0 auto" },
     card: { background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 12, boxShadow: C.shadow },
     btn: { background: C.brand, color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontWeight: 600, fontSize: 13, cursor: "pointer" },
@@ -65,15 +65,21 @@ export function ManagerView() {
 
   return (
     <div style={S.app}>
-      <div style={S.bar}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.textMain, letterSpacing: "-0.02em" }}>
-            Appier <span style={{ color: C.brand }}>AI</span> Strategy Console
-          </div>
-          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1, letterSpacing: "0.04em" }}>REVENUE COMMAND CENTER</div>
-        </div>
-        <button style={S.btnGhost} onClick={() => router.push("/deals")}>← Deal Room</button>
-      </div>
+      <AppHeader
+        left={
+          <AppLogo
+            title={
+              <>Appier <span style={{ color: C.brand }}>AI</span> Strategy Console</>
+            }
+            subtitle="REVENUE COMMAND CENTER"
+          />
+        }
+        right={
+          <button style={S.btnGhost} onClick={() => router.push("/deals")}>
+            ← Deal Room
+          </button>
+        }
+      />
 
       <div style={S.body}>
         {/* Tabs */}

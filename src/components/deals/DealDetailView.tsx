@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDealStore } from "@/store/dealStore";
-import { C, STAGES } from "@/lib/constants";
+import { C } from "@/lib/constants";
 import { latestScore, daysSinceLast, daysBetween } from "@/lib/dealUtils";
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { StagePill } from "@/components/ui/StagePill";
 import { StageProgress } from "@/components/ui/StageProgress";
+import { AppHeader, AppLogo } from "@/components/ui/AppHeader";
 
 interface Props {
   dealId: number;
@@ -41,18 +42,6 @@ export function DealDetailView({ dealId, fromManager }: Props) {
 
   const S = {
     app: { minHeight: "100vh", background: C.bgMain },
-    bar: {
-      background: C.bgCard,
-      borderBottom: `1px solid ${C.border}`,
-      padding: "13px 22px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      position: "sticky" as const,
-      top: 0,
-      zIndex: 10,
-      boxShadow: C.shadowSm,
-    },
     body: { padding: "20px", maxWidth: 700, margin: "0 auto" },
     card: { background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 12, boxShadow: C.shadow },
     btn: { background: C.brand, color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontWeight: 600, fontSize: 13, cursor: "pointer" },
@@ -63,19 +52,21 @@ export function DealDetailView({ dealId, fromManager }: Props) {
 
   return (
     <div style={S.app}>
-      <div style={S.bar}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.textMain, letterSpacing: "-0.02em" }}>
-          Appier <span style={{ color: C.brand }}>AI</span> Deal Room
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {fromManager && (
-            <span style={{ fontSize: 10, background: C.brandLight, color: C.brand, borderRadius: 4, padding: "2px 8px", fontWeight: 700 }}>MG閲覧中</span>
-          )}
-          <button style={S.btnGhost} onClick={() => router.push(fromManager ? "/manager" : "/deals")}>
-            Strategy Console
-          </button>
-        </div>
-      </div>
+      <AppHeader
+        left={<AppLogo />}
+        right={
+          <>
+            {fromManager && (
+              <span style={{ fontSize: 10, background: C.brandLight, color: C.brand, borderRadius: 4, padding: "2px 8px", fontWeight: 700 }}>
+                MG閲覧中
+              </span>
+            )}
+            <button style={S.btnGhost} onClick={() => router.push(fromManager ? "/manager" : "/deals")}>
+              {fromManager ? "← Strategy Console" : "Strategy Console"}
+            </button>
+          </>
+        }
+      />
 
       <div style={S.body}>
         <button style={S.back} onClick={() => router.push(fromManager ? "/manager" : "/deals")}>
