@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
-export const maxDuration = 60;
-
-const GEMINI_UPLOAD_BASE = "https://generativelanguage.googleapis.com/upload/v1beta/files";
+export const maxDuration = 120;
 
 export async function POST(req: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -10,61 +11,47 @@ export async function POST(req: Request) {
 
   const formData = await req.formData();
   const chunk = formData.get("chunk") as File;
-  const chunkStart = parseInt(formData.get("chunkStart") as string, 10);
-  const totalSize = parseInt(formData.get("totalSize") as string, 10);
+  const chunkIndex = parseInt(formData.get("chunkIndex") as string, 10);
+  const totalChunks = parseInt(formData.get("totalChunks") as string, 10);
   const mimeType = formData.get("mimeType") as string;
-  const fileName = formData.get("fileName") as string;
-  const isFinal = formData.get("isFinal") === "true";
-  let uploadUrl = (formData.get("uploadUrl") as string) || "";
+  const ext = formData.get("ext") as string;
+  const sessionId = formData.get("sessionId") as string;
 
-  const chunkBytes = await chunk.arrayBuffer();
+  const tmpPath = path.join(os.tmpdir(), `${sessionId}.${ext}`);
+  const chunkBytes = Buffer.from(await chunk.arrayBuffer());
 
-  // First chunk: initiate a Gemini resumable upload session
-  if (!uploadUrl) {
-    const initRes = await fetch(`${GEMINI_UPLOAD_BASE}?uploadType=resumable&key=${apiKey}`, {
-      method: "POST",
-      headers: {
-        "X-Goog-Upload-Protocol": "resumable",
-        "X-Goog-Upload-Command": "start",
-        "X-Goog-Upload-Header-Content-Type": mimeType,
-        "X-Goog-Upload-Header-Content-Length": String(totalSize),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ file: { display_name: fileName } }),
-    });
-    uploadUrl = initRes.headers.get("X-Goog-Upload-URL") ?? "";
-    if (!uploadUrl) {
-      return NextResponse.json({ error: "Failed to initiate upload session" }, { status: 502 });
+  // Write first chunk, append subsequent ones
+  if (chunkIndex === 0) {
+    fs.writeFileSync(tmpPath, chunkBytes);
+  } else {
+    if (!fs.existsSync(tmpPath)) {
+      return NextResponse.json(
+        { error: "セッションが見つかりません。再度アップロードしてください。" },
+        { status: 409 }
+      );
     }
+    fs.appendFileSync(tmpPath, chunkBytes);
   }
 
-  // Upload this chunk (finalize on last chunk)
-  const command = isFinal ? "upload, finalize" : "upload";
-  const uploadRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Length": String(chunkBytes.byteLength),
-      "X-Goog-Upload-Protocol": "resumable",
-      "X-Goog-Upload-Command": command,
-      "X-Goog-Upload-Offset": String(chunkStart),
-    },
-    body: chunkBytes,
-  });
-
+  const isFinal = chunkIndex === totalChunks - 1;
   if (!isFinal) {
-    return NextResponse.json({ uploadUrl });
+    return NextResponse.json({ ok: true, received: chunkIndex + 1 });
   }
 
-  if (!uploadRes.ok) {
-    const errText = await uploadRes.text();
-    return NextResponse.json({ error: `Upload failed: ${errText}` }, { status: 502 });
+  // All chunks assembled — upload to Gemini Files API via SDK
+  try {
+    const { GoogleAIFileManager } = await import("@google/generative-ai/server");
+    const fileManager = new GoogleAIFileManager(apiKey);
+    const uploadRes = await fileManager.uploadFile(tmpPath, {
+      mimeType,
+      displayName: `meeting_${sessionId}`,
+    });
+    return NextResponse.json({ fileUri: uploadRes.file.uri, mimeType });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[upload-audio-chunk] Gemini upload error:", err);
+    return NextResponse.json({ error: `Gemini upload failed: ${msg}` }, { status: 502 });
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch { /* ignore cleanup errors */ }
   }
-
-  const fileData = await uploadRes.json();
-  const fileUri = fileData.file?.uri as string | undefined;
-  if (!fileUri) {
-    return NextResponse.json({ error: "No file URI in response" }, { status: 502 });
-  }
-
-  return NextResponse.json({ fileUri, mimeType });
 }

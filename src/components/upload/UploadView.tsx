@@ -46,30 +46,29 @@ export function UploadView({ dealId }: Props) {
 
   const uploadLargeAudio = async (file: File, mimeType: string): Promise<string> => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    let uploadUrl = "";
+    const ext = file.name.split(".").pop() ?? "mp3";
+    const sessionId = `audio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     for (let i = 0; i < totalChunks; i++) {
       const start = i * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = file.slice(start, end);
-      const isFinal = i === totalChunks - 1;
 
       const chunkForm = new FormData();
       chunkForm.append("chunk", new File([chunk], file.name, { type: mimeType }));
-      chunkForm.append("chunkStart", String(start));
-      chunkForm.append("totalSize", String(file.size));
+      chunkForm.append("chunkIndex", String(i));
+      chunkForm.append("totalChunks", String(totalChunks));
       chunkForm.append("mimeType", mimeType);
-      chunkForm.append("fileName", file.name);
-      chunkForm.append("isFinal", String(isFinal));
-      if (uploadUrl) chunkForm.append("uploadUrl", uploadUrl);
+      chunkForm.append("ext", ext);
+      chunkForm.append("sessionId", sessionId);
 
       const res = await fetch("/api/upload-audio-chunk", { method: "POST", body: chunkForm });
-      if (!res.ok) throw new Error(`Chunk ${i + 1} upload failed`);
-
+      // Always read the body to get the actual error message
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      if (isFinal) return data.fileUri as string;
-      uploadUrl = data.uploadUrl as string;
+      if (!res.ok || data.error) {
+        throw new Error(data.error ?? `チャンク ${i + 1}/${totalChunks} のアップロードに失敗しました`);
+      }
+      if (data.fileUri) return data.fileUri as string;
       setUploadProgress(Math.round(((i + 1) / totalChunks) * 80));
     }
     throw new Error("Upload did not complete");
