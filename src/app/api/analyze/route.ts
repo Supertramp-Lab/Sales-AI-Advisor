@@ -303,20 +303,32 @@ ${criteriaText}
 
 export async function POST(req: NextRequest) {
   let stage = "案件化";
-  try {
-    const formData = await req.formData();
-    const text = (formData.get("text") as string) ?? "";
-    stage = (formData.get("stage") as string) ?? "案件化";
-    const file = formData.get("file") as File | null;
-    const apiKey = process.env.GEMINI_API_KEY;
+  const formData = await req.formData();
+  const text = (formData.get("text") as string) ?? "";
+  stage = (formData.get("stage") as string) ?? "案件化";
+  const file = formData.get("file") as File | null;
+  const apiKey = process.env.GEMINI_API_KEY;
 
-    // Large file: uploaded via chunked endpoint, received as a Files API URI
-    const fileUri = formData.get("fileUri") as string | null;
-    const fileMimeType = formData.get("fileMimeType") as string | null;
-    if (fileUri && fileMimeType && apiKey) {
-      return NextResponse.json(await callGeminiWithFileUri(fileUri, fileMimeType, stage, apiKey));
+  // Large file: uploaded via chunked endpoint, received as a Files API URI.
+  // Do NOT fall back to mock data here — surface real errors so the client shows them.
+  const fileUri = formData.get("fileUri") as string | null;
+  const fileMimeType = formData.get("fileMimeType") as string | null;
+  if (fileUri && fileMimeType) {
+    if (!apiKey) {
+      return NextResponse.json({ error: "GEMINI_API_KEY が設定されていません" }, { status: 500 });
     }
+    try {
+      const result = await callGeminiWithFileUri(fileUri, fileMimeType, stage, apiKey);
+      return NextResponse.json(result);
+    } catch (err) {
+      console.error("[analyze] callGeminiWithFileUri error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `AI分析エラー: ${msg}` }, { status: 500 });
+    }
+  }
 
+  // Standard flow (small files / text) — fall back to mock when no API key
+  try {
     if (file && file.size > 0 && apiKey) {
       const ext = file.name.toLowerCase().split(".").pop() ?? "";
       const audioMime = AUDIO_MIME[ext];

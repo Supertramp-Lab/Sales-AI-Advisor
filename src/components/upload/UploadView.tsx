@@ -109,6 +109,9 @@ export function UploadView({ dealId }: Props) {
       setUploadProgress(95);
       const res = await fetch("/api/analyze", { method: "POST", body: form });
       const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error ?? "分析APIがエラーを返しました");
+      }
       setUploadProgress(100);
 
       const newId = addMeeting(dealId, {
