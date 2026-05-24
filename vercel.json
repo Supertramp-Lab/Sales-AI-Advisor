@@ -3,8 +3,7 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "regions": ["nrt1"],
-  "env": {
+"env": {
     "NEXTAUTH_URL": "https://sales-ai-advisor.vercel.app"
   }
 }
