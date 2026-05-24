@@ -158,6 +158,22 @@ const AUDIO_MIME: Record<string, string> = {
   webm: "audio/webm",
 };
 
+async function waitForFileActive(fileUri: string, apiKey: string): Promise<void> {
+  // fileUri: https://generativelanguage.googleapis.com/v1beta/files/abc123
+  const fileId = fileUri.split("/v1beta/")[1]; // "files/abc123"
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${fileId}?key=${apiKey}`
+    );
+    const data = await res.json();
+    console.log(`[waitForFileActive] attempt ${i + 1}: state=${data.state}`);
+    if (data.state === "ACTIVE") return;
+    if (data.state === "FAILED") throw new Error(`File processing failed: ${JSON.stringify(data)}`);
+  }
+  throw new Error("File not ready after 60s of polling");
+}
+
 async function callGeminiWithFileUri(
   fileUri: string,
   mimeType: string,
@@ -212,6 +228,9 @@ ${criteriaText}
     { "id": "na1", "text": "具体的なNext Action（アクション動詞で始める）", "status": "active", "priority": 1 }
   ]
 }`;
+
+  // Wait for the file to become ACTIVE before using it in generation
+  await waitForFileActive(fileUri, apiKey);
 
   const result = await model.generateContent([
     { fileData: { mimeType, fileUri } },

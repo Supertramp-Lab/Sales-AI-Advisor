@@ -26,6 +26,7 @@ export function UploadView({ dealId }: Props) {
   const [uploadText, setUploadText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [stageChangeReason, setStageChangeReason] = useState("");
 
   if (!deal) return null;
@@ -80,6 +81,7 @@ export function UploadView({ dealId }: Props) {
     }
     setAnalyzing(true);
     setUploadProgress(0);
+    setUploadError(null);
 
     const today = new Date().toISOString().slice(0, 10);
     const text = uploadText.trim() || `商談記録 ${today}`;
@@ -97,7 +99,7 @@ export function UploadView({ dealId }: Props) {
         if (audioMime && uploadFile.size > LARGE_FILE_THRESHOLD) {
           // Large audio file: upload in chunks, then analyze via fileUri
           const fileUri = await uploadLargeAudio(uploadFile, audioMime);
-          setUploadProgress(90);
+          setUploadProgress(85); // waiting for ACTIVE state + generation
           form.append("fileUri", fileUri);
           form.append("fileMimeType", audioMime);
         } else {
@@ -126,7 +128,10 @@ export function UploadView({ dealId }: Props) {
       });
 
       router.push(`/deals/${dealId}/meetings/${newId}`);
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "不明なエラーが発生しました";
+      console.error("[handleAnalyze]", err);
+      setUploadError(msg);
       setAnalyzing(false);
       setUploadProgress(0);
     }
@@ -247,6 +252,11 @@ export function UploadView({ dealId }: Props) {
           </div>
         )}
 
+        {uploadError && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 12, color: "#B91C1C", lineHeight: 1.6 }}>
+            ⚠️ エラー: {uploadError}
+          </div>
+        )}
         <button
           style={{ ...S.btn, width: "100%", padding: "12px", opacity: analyzing ? 0.7 : 1 }}
           onClick={handleAnalyze}
@@ -255,7 +265,9 @@ export function UploadView({ dealId }: Props) {
           {analyzing
             ? uploadProgress < 90
               ? `⏫　アップロード中... ${uploadProgress}%`
-              : "⏳　AIが分析中..."
+              : uploadProgress < 95
+              ? "⏳　ファイル処理待機中..."
+              : "🔍　AIが分析中..."
             : "🔍　AI分析を開始する"}
         </button>
         {analyzing && uploadProgress > 0 && uploadProgress < 100 && (
