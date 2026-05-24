@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 120;
+
 type CriteriaScore = {
   id: string;
   label: string;
@@ -156,6 +158,68 @@ const AUDIO_MIME: Record<string, string> = {
   webm: "audio/webm",
 };
 
+async function callGeminiWithFileUri(
+  fileUri: string,
+  mimeType: string,
+  stage: string,
+  apiKey: string
+): Promise<AnalyzeResult> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genai = new GoogleGenerativeAI(apiKey);
+  const model = genai.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    generationConfig: { responseMimeType: "application/json" },
+  });
+
+  const criteria = STAGE_CRITERIA[stage] ?? STAGE_CRITERIA["案件化"];
+  const criteriaText = criteria.map((c) => `- ${c.id} (${c.label}): ${c.description}`).join("\n");
+
+  const prompt = `あなたはAppier Enterprise SolutionsのAI営業アドバイザーです。
+この音声ファイルは商談の録音です。会話内容を文字起こしして分析し、JSON形式で回答してください。
+
+ステージ: ${stage}
+
+評価基準（${stage}ステージ、各項目0〜5点）:
+${criteriaText}
+
+以下のJSON形式で厳密に回答してください（JSONのみ、説明文不要）:
+{
+  "summary": "商談の要約（2〜3文、日本語）",
+  "totalScore": 合計スコア（数値）,
+  "maxScore": ${criteria.length * 5},
+  "criteriaScores": [
+    {
+      "id": "基準ID",
+      "label": "ラベル",
+      "score": スコア（0〜5の整数）,
+      "maxScore": 5,
+      "comment": "スコアの根拠（1文）",
+      "recordSummary": "音声から確認できた該当発言の要約"
+    }
+  ],
+  "customerAnalysis": {
+    "attitude": "顧客の態度・温度感（1〜2文）",
+    "preference": "顧客のコンテンツ好み（1〜2文）",
+    "tactics": "推奨コミュニケーション戦術（具体的に1〜2文）"
+  },
+  "strengths": [
+    { "id": "s1", "text": "達成された強みの項目（簡潔に）", "corrected": false, "source": "ai" }
+  ],
+  "gaps": [
+    { "id": "g1", "text": "未達成・課題の項目（簡潔に）", "corrected": false, "source": "ai" }
+  ],
+  "nextActions": [
+    { "id": "na1", "text": "具体的なNext Action（アクション動詞で始める）", "status": "active", "priority": 1 }
+  ]
+}`;
+
+  const result = await model.generateContent([
+    { fileData: { mimeType, fileUri } },
+    prompt,
+  ]);
+  return JSON.parse(result.response.text()) as AnalyzeResult;
+}
+
 async function callGeminiWithAudio(
   audioBase64: string,
   mimeType: string,
@@ -226,6 +290,13 @@ export async function POST(req: NextRequest) {
     stage = (formData.get("stage") as string) ?? "案件化";
     const file = formData.get("file") as File | null;
     const apiKey = process.env.GEMINI_API_KEY;
+
+    // Large file: uploaded via chunked endpoint, received as a Files API URI
+    const fileUri = formData.get("fileUri") as string | null;
+    const fileMimeType = formData.get("fileMimeType") as string | null;
+    if (fileUri && fileMimeType && apiKey) {
+      return NextResponse.json(await callGeminiWithFileUri(fileUri, fileMimeType, stage, apiKey));
+    }
 
     if (file && file.size > 0 && apiKey) {
       const ext = file.name.toLowerCase().split(".").pop() ?? "";

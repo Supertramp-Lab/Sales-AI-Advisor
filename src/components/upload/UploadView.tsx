@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useDealStore } from "@/store/dealStore";
 import { C, STAGES, PRODUCTS, type Stage } from "@/lib/constants";
@@ -25,6 +25,7 @@ export function UploadView({ dealId }: Props) {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadText, setUploadText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [stageChangeReason, setStageChangeReason] = useState("");
 
   if (!deal) return null;
@@ -36,24 +37,78 @@ export function UploadView({ dealId }: Props) {
   const selectedIdx = STAGES.indexOf(uploadStage);
   const isRegression = uploadType === "commercial" && selectedIdx < currentIdx;
 
+  const AUDIO_MIME: Record<string, string> = {
+    mp3: "audio/mp3", m4a: "audio/mp4", wav: "audio/wav", ogg: "audio/ogg", webm: "audio/webm",
+  };
+  const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB — safely under Vercel's 4.5MB request limit
+  const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4MB
+
+  const uploadLargeAudio = async (file: File, mimeType: string): Promise<string> => {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let uploadUrl = "";
+
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+      const isFinal = i === totalChunks - 1;
+
+      const chunkForm = new FormData();
+      chunkForm.append("chunk", new File([chunk], file.name, { type: mimeType }));
+      chunkForm.append("chunkStart", String(start));
+      chunkForm.append("totalSize", String(file.size));
+      chunkForm.append("mimeType", mimeType);
+      chunkForm.append("fileName", file.name);
+      chunkForm.append("isFinal", String(isFinal));
+      if (uploadUrl) chunkForm.append("uploadUrl", uploadUrl);
+
+      const res = await fetch("/api/upload-audio-chunk", { method: "POST", body: chunkForm });
+      if (!res.ok) throw new Error(`Chunk ${i + 1} upload failed`);
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (isFinal) return data.fileUri as string;
+      uploadUrl = data.uploadUrl as string;
+      setUploadProgress(Math.round(((i + 1) / totalChunks) * 80));
+    }
+    throw new Error("Upload did not complete");
+  };
+
   const handleAnalyze = async () => {
     if (isRegression) {
       submitStageChange(dealId, deal.stage, uploadStage, stageChangeReason || "ステージ後退");
     }
     setAnalyzing(true);
+    setUploadProgress(0);
 
     const today = new Date().toISOString().slice(0, 10);
     const text = uploadText.trim() || `商談記録 ${today}`;
 
-    const form = new FormData();
-    form.append("text", text);
-    form.append("stage", uploadStage);
-    form.append("products", JSON.stringify(uploadProducts));
-    if (uploadFile) form.append("file", uploadFile);
-
     try {
+      const form = new FormData();
+      form.append("text", text);
+      form.append("stage", uploadStage);
+      form.append("products", JSON.stringify(uploadProducts));
+
+      if (uploadFile) {
+        const ext = uploadFile.name.toLowerCase().split(".").pop() ?? "";
+        const audioMime = AUDIO_MIME[ext];
+
+        if (audioMime && uploadFile.size > LARGE_FILE_THRESHOLD) {
+          // Large audio file: upload in chunks, then analyze via fileUri
+          const fileUri = await uploadLargeAudio(uploadFile, audioMime);
+          setUploadProgress(90);
+          form.append("fileUri", fileUri);
+          form.append("fileMimeType", audioMime);
+        } else {
+          form.append("file", uploadFile);
+        }
+      }
+
+      setUploadProgress(95);
       const res = await fetch("/api/analyze", { method: "POST", body: form });
       const data = await res.json();
+      setUploadProgress(100);
 
       const newId = addMeeting(dealId, {
         date: today,
@@ -73,6 +128,7 @@ export function UploadView({ dealId }: Props) {
       router.push(`/deals/${dealId}/meetings/${newId}`);
     } catch {
       setAnalyzing(false);
+      setUploadProgress(0);
     }
   };
 
@@ -153,12 +209,16 @@ export function UploadView({ dealId }: Props) {
           >
             <div style={{ fontSize: 28, marginBottom: 10 }}>📎</div>
             <div style={{ color: C.textSub, fontSize: 13 }}>
-              {uploadFile
-                ? <span style={{ color: C.brand, fontWeight: 600 }}>✓ {uploadFile.name}</span>
-                : "録音ファイルまたは議事録をアップロード"
-              }
+              {uploadFile ? (
+                <span style={{ color: C.brand, fontWeight: 600 }}>
+                  ✓ {uploadFile.name}
+                  <span style={{ fontWeight: 400, color: C.textMuted, marginLeft: 6 }}>
+                    ({(uploadFile.size / 1024 / 1024).toFixed(1)} MB)
+                  </span>
+                </span>
+              ) : "録音ファイルまたは議事録をアップロード"}
             </div>
-            <div style={{ color: C.textMuted, fontSize: 11, marginTop: 4 }}>.mp3 / .m4a / .txt / .docx 対応</div>
+            <div style={{ color: C.textMuted, fontSize: 11, marginTop: 4 }}>.mp3 / .m4a / .wav / .txt 対応（サイズ制限なし）</div>
             <input id="fu" type="file" style={{ display: "none" }} onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} />
           </div>
         ) : (
@@ -192,8 +252,17 @@ export function UploadView({ dealId }: Props) {
           onClick={handleAnalyze}
           disabled={analyzing}
         >
-          {analyzing ? "⏳　AIが分析中..." : "🔍　AI分析を開始する"}
+          {analyzing
+            ? uploadProgress < 90
+              ? `⏫　アップロード中... ${uploadProgress}%`
+              : "⏳　AIが分析中..."
+            : "🔍　AI分析を開始する"}
         </button>
+        {analyzing && uploadProgress > 0 && uploadProgress < 100 && (
+          <div style={{ marginTop: 10, background: C.bgMain, borderRadius: 8, height: 6, overflow: "hidden" }}>
+            <div style={{ width: `${uploadProgress}%`, height: "100%", background: C.brand, transition: "width 0.3s ease", borderRadius: 8 }} />
+          </div>
+        )}
       </div>
     </div>
   );
