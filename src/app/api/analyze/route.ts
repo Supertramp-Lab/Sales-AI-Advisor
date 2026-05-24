@@ -143,7 +143,7 @@ async function callGemini(text: string, stage: string, apiKey: string): Promise<
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(apiKey);
   const model = genai.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash",
     generationConfig: { responseMimeType: "application/json" },
   });
   const result = await model.generateContent(buildPrompt(stage, text));
@@ -183,7 +183,7 @@ async function callGeminiWithFileUri(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(apiKey);
   const model = genai.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash",
     generationConfig: { responseMimeType: "application/json" },
   });
 
@@ -248,7 +248,7 @@ async function callGeminiWithAudio(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(apiKey);
   const model = genai.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash",
     generationConfig: { responseMimeType: "application/json" },
   });
 
