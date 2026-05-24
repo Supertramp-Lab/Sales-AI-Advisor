@@ -8,18 +8,21 @@ import { latestScore, daysSinceLast, currentStageDays, activeActionsCount, pendi
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { StagePill } from "@/components/ui/StagePill";
 import { AppHeader, AppLogo } from "@/components/ui/AppHeader";
+import { NewDealDialog } from "@/components/deals/NewDealDialog";
+import { DealSyncer } from "@/components/providers/DealSyncer";
 
 type StageFilter = "all" | Stage | "won" | "lost";
 type SortKey = "lastUpdate" | "score" | "leadTime";
 
 export function DealsListView() {
   const router = useRouter();
-  const { deals, closeDeal } = useDealStore();
+  const { deals, isLoaded, closeDeal } = useDealStore();
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [sort, setSort] = useState<SortKey>("lastUpdate");
   const [closeModal, setCloseModal] = useState<number | null>(null);
   const [closeType, setCloseType] = useState<"won" | "lost">("won");
   const [closeReason, setCloseReason] = useState("");
+  const [newDealOpen, setNewDealOpen] = useState(false);
 
   const pendingTotal = deals.reduce(
     (a, d) => a + pendingCorrectionsCount(d.meetings),
@@ -95,6 +98,13 @@ export function DealsListView() {
 
   return (
     <div style={S.app}>
+      <DealSyncer />
+      {newDealOpen && <NewDealDialog onClose={() => setNewDealOpen(false)} />}
+      {!isLoaded && (
+        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#F7F8FA", zIndex: 999 }}>
+          <p style={{ color: "#6B7280", fontSize: 14 }}>読み込み中...</p>
+        </div>
+      )}
       <AppHeader
         left={<AppLogo subtitle="REVENUE INTELLIGENCE HUB" />}
         right={
@@ -126,7 +136,7 @@ export function DealsListView() {
                 </span>
               )}
             </button>
-            <button style={S.btn}>＋ 新規案件</button>
+            <button style={S.btn} onClick={() => setNewDealOpen(true)}>＋ 新規案件</button>
           </>
         }
       />

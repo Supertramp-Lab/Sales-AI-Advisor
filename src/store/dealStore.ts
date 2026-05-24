@@ -9,18 +9,23 @@ import type {
   UpdateState,
   CorrectionType,
 } from "@/types";
-import { INIT_DEALS, INIT_APPROVAL } from "@/lib/initialData";
+import { INIT_APPROVAL } from "@/lib/initialData";
+import type { Product } from "@/lib/constants";
 import { reEvaluate } from "@/lib/scoring";
 
 const TODAY = "2026-05-21";
 
 interface DealStore {
   deals: Deal[];
+  isLoaded: boolean;
   approvalSettings: ApprovalSettings;
   pendingStageChange: PendingStageChange | null;
   updateState: UpdateState;
   summaryRule: string;
   insightRule: string;
+
+  loadDeals: () => Promise<void>;
+  addDeal: (company: string, contact: string, products: Product[], stage: Deal["stage"], owner: string) => void;
 
   // Deal mutations
   closeDeal: (dealId: number, type: "won" | "lost", reason: string) => void;
@@ -77,7 +82,8 @@ interface DealStore {
 }
 
 export const useDealStore = create<DealStore>((set, get) => ({
-  deals: INIT_DEALS,
+  deals: [],
+  isLoaded: false,
   approvalSettings: INIT_APPROVAL,
   pendingStageChange: null,
   updateState: null,
@@ -110,6 +116,31 @@ Stage → 最新商談日 → 最新総括 → Next Action
 上記2点を踏まえた具体的な次回以降の対応戦術を提示する。
 製品知識・競合分析・ユースケース情報を組み合わせて提案すること。
 抽象的な表現を避け、具体的なアクションとして記述する。`,
+
+  loadDeals: async () => {
+    const res = await fetch("/api/deals");
+    if (!res.ok) return;
+    const deals = await res.json();
+    set({ deals, isLoaded: true });
+  },
+
+  addDeal: (company, contact, products, stage, owner) => {
+    const today = new Date().toISOString().split("T")[0];
+    const newDeal: Deal = {
+      id: Date.now(),
+      company,
+      contact,
+      products,
+      stage,
+      lastUpdate: "今日",
+      owner,
+      status: "active",
+      cumulativeInsight: { attitude: "", preference: "", tactics: "", history: [] },
+      stageHistory: [{ stage, enteredAt: today, exitedAt: null }],
+      meetings: [],
+    };
+    set((state) => ({ deals: [...state.deals, newDeal] }));
+  },
 
   closeDeal: (dealId, type, reason) =>
     set((state) => ({
