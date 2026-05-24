@@ -5,6 +5,6 @@
   "installCommand": "npm install",
   "regions": ["nrt1"],
   "env": {
-    "NEXTAUTH_URL": "@nextauth_url"
+    "NEXTAUTH_URL": "https://sales-ai-advisor.vercel.app"
   }
 }
