@@ -85,6 +85,8 @@ export interface Meeting {
   corrections: Correction[];
   managerReview: ManagerReview | null;
   weeklyReviewData?: WeeklyReviewData;
+  driveFileId?: string;
+  driveFileUrl?: string;
 }
 
 export interface InsightHistory {

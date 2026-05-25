@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useDealStore } from "@/store/dealStore";
 import { C, STAGES, PRODUCTS, type Stage } from "@/lib/constants";
 import { AppHeader, AppLogo } from "@/components/ui/AppHeader";
@@ -16,6 +17,7 @@ type UploadTab = "file" | "text";
 export function UploadView({ dealId }: Props) {
   const router = useRouter();
   const { deals, submitStageChange, approvalSettings, addMeeting } = useDealStore();
+  const { data: session } = useSession();
   const deal = deals.find((d) => d.id === dealId);
 
   const [uploadType, setUploadType] = useState<UploadType>("commercial");
@@ -44,7 +46,11 @@ export function UploadView({ dealId }: Props) {
   const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB — safely under Vercel's 4.5MB request limit
   const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4MB
 
-  const uploadLargeAudio = async (file: File, mimeType: string): Promise<string> => {
+  const uploadLargeAudio = async (
+    file: File,
+    mimeType: string,
+    accessToken?: string
+  ): Promise<{ fileUri: string; driveFileId?: string; driveFileUrl?: string }> => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     const ext = file.name.split(".").pop() ?? "mp3";
     const sessionId = `audio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -53,6 +59,7 @@ export function UploadView({ dealId }: Props) {
       const start = i * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = file.slice(start, end);
+      const isFinal = i === totalChunks - 1;
 
       const chunkForm = new FormData();
       chunkForm.append("chunk", new File([chunk], file.name, { type: mimeType }));
@@ -61,14 +68,22 @@ export function UploadView({ dealId }: Props) {
       chunkForm.append("mimeType", mimeType);
       chunkForm.append("ext", ext);
       chunkForm.append("sessionId", sessionId);
+      chunkForm.append("fileName", file.name);
+      // Send access token only with the final chunk (needed for Drive upload)
+      if (isFinal && accessToken) chunkForm.append("accessToken", accessToken);
 
       const res = await fetch("/api/upload-audio-chunk", { method: "POST", body: chunkForm });
-      // Always read the body to get the actual error message
       const data = await res.json();
       if (!res.ok || data.error) {
         throw new Error(data.error ?? `チャンク ${i + 1}/${totalChunks} のアップロードに失敗しました`);
       }
-      if (data.fileUri) return data.fileUri as string;
+      if (data.fileUri) {
+        return {
+          fileUri: data.fileUri as string,
+          driveFileId: data.driveFileId as string | undefined,
+          driveFileUrl: data.driveFileUrl as string | undefined,
+        };
+      }
       setUploadProgress(Math.round(((i + 1) / totalChunks) * 80));
     }
     throw new Error("Upload did not complete");
@@ -91,16 +106,22 @@ export function UploadView({ dealId }: Props) {
       form.append("stage", uploadStage);
       form.append("products", JSON.stringify(uploadProducts));
 
+      let driveFileId: string | undefined;
+      let driveFileUrl: string | undefined;
+
       if (uploadFile) {
         const ext = uploadFile.name.toLowerCase().split(".").pop() ?? "";
         const audioMime = AUDIO_MIME[ext];
 
         if (audioMime && uploadFile.size > LARGE_FILE_THRESHOLD) {
-          // Large audio file: upload in chunks, then analyze via fileUri
-          const fileUri = await uploadLargeAudio(uploadFile, audioMime);
-          setUploadProgress(85); // waiting for ACTIVE state + generation
-          form.append("fileUri", fileUri);
+          // Large audio file: chunk upload → Gemini Files API + Google Drive
+          const accessToken = session?.access_token;
+          const result = await uploadLargeAudio(uploadFile, audioMime, accessToken);
+          setUploadProgress(85);
+          form.append("fileUri", result.fileUri);
           form.append("fileMimeType", audioMime);
+          driveFileId = result.driveFileId;
+          driveFileUrl = result.driveFileUrl;
         } else {
           form.append("file", uploadFile);
         }
@@ -127,6 +148,8 @@ export function UploadView({ dealId }: Props) {
         strengths: data.strengths ?? [],
         gaps: data.gaps ?? [],
         nextActions: data.nextActions ?? [],
+        driveFileId,
+        driveFileUrl,
       });
 
       router.push(`/deals/${dealId}/meetings/${newId}`);

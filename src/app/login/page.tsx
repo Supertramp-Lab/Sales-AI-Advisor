@@ -1,7 +1,14 @@
 import { signIn } from "@/auth";
 import { C } from "@/lib/constants";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const isDomainError = error === "AccessDenied";
+
   const configured = !!(
     process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
   );
@@ -50,6 +57,25 @@ export default function LoginPage() {
         >
           REVENUE INTELLIGENCE HUB
         </div>
+
+        {isDomainError && (
+          <div
+            style={{
+              background: "#FEF2F2",
+              border: "1px solid #FECACA",
+              borderRadius: 10,
+              padding: "12px 16px",
+              marginBottom: 20,
+              fontSize: 12,
+              color: "#B91C1C",
+              lineHeight: 1.6,
+              textAlign: "left",
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>⚠️ アクセス拒否</div>
+            <div>@appier.com のアカウントのみログイン可能です。</div>
+          </div>
+        )}
 
         {configured ? (
           <form

@@ -104,6 +104,28 @@ export function AnalysisView({ dealId, meetingId }: Props) {
               <ScoreBar score={meeting.totalScore} max={meeting.maxScore!} />
             )}
           </div>
+          {meeting.driveFileUrl && (
+            <a
+              href={meeting.driveFileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                color: C.brand,
+                fontWeight: 600,
+                textDecoration: "none",
+                background: C.brandLight,
+                borderRadius: 7,
+                padding: "5px 12px",
+                marginTop: 10,
+              }}
+            >
+              🎙 録音ファイルを開く（Google Drive）
+            </a>
+          )}
           {meeting.managerReview && (
             <div style={{ marginTop: 12, background: meeting.managerReview.status === "approved" ? C.successLight : C.dangerLight, borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: meeting.managerReview.status === "approved" ? C.success : C.danger, marginBottom: 4 }}>
